@@ -1,130 +1,302 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import React, { Component } from 'react';
 import io from "socket.io-client"
 
+import { withStyles } from '@material-ui/core/styles';
+
+import AppBar from '@material-ui/core/AppBar';
+import Toolbar from '@material-ui/core/Toolbar';
+import Typography from '@material-ui/core/Typography';
+import IconButton from '@material-ui/core/IconButton';
+import MenuIcon from '@material-ui/icons/Menu';
+import AccountCircle from '@material-ui/icons/AccountCircle';
+import Switch from '@material-ui/core/Switch';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
+import FormGroup from '@material-ui/core/FormGroup';
+import MenuItem from '@material-ui/core/MenuItem';
+import Menu from '@material-ui/core/Menu';
+import Fab from '@material-ui/core/Fab';
+import NavigationIcon from '@material-ui/icons/Navigation';
+import Icon from '@material-ui/core/Icon';
 
 
+
+const styles = {
+    root: {
+        flexGrow: 1,
+    },
+    grow: {
+        flexGrow: 1,
+    },
+
+    Toolbar: {
+        display: "flex",
+
+    }
+
+};
 
 const socket = io("http://localhost:8000")
+export default class Todo extends Component {
 
-class Todo extends Component {
     constructor() {
         super()
         this.state = {
-            todo: "",
-            newTodo: "",
-            isUpdateing: true,
-            todoArray: [],
-            updatedVal: {}
+            auth: true,
+            anchorEl: null,
+            messageArr: [],
+            userArr: [],
+            message: "",
+            currentChatName: "",
+            myName: "",
+            socketID: "",
+            conversetionOBJ: {},
+            currentUser: {},
+            UseractiveColor: "green",
+            ChatactiveColor: "",
+
+
         }
     }
-    componentWillMount() {
-        // =>  GETTING ALL TODOS WHEN STARTING THE 
-        socket.on("GET_PREV_TODO", (data) => {
+
+
+    async componentWillMount() {
+        socket.on("connect", async () => {
+            const currentUser = await JSON.parse(localStorage.getItem("currentUser"))
+            currentUser.socketId = await socket.id
             this.setState({
-                todoArray: data
+                currentUser: currentUser
+            })
+            this.setState({
+                socketID: socket.id,
+                currentUser: currentUser
             })
         })
     }
 
 
     componentDidMount() {
-        // => GETTING TODO WHEN ADD NEW ITEM IN DATABASE
-        socket.on("ADD_TODO", (data) => {
-            let a = this.state.todoArray
-            a.push(data)
-            this.setState({ todoArray: a })
-        })
-
-        // => GET ALL TODOS AFTER DELETEING ANY TODO ( WITHOUT DELETED TODO )
-        socket.on("DELTE_TODO", (data) => {
-            this.state.todoArray.map((val, ind) => {
-                if (val._id === data._id) {
-                    this.state.todoArray.splice(ind, 1)
-                    this.setState({ todoArray: this.state.todoArray })
+        const currentUser = JSON.parse(localStorage.getItem("currentUser"))
+        socket.on("USERS", (data) => {
+            let arr = []
+            data.map((val) => {
+                if (val._id !== currentUser._id) {
+                    arr.push(val)
                 }
             })
-        })
-
-        // => GET UPDATED TODO
-        socket.on("UPDATED_TODO", (data) => {
-            this.state.todoArray[data.index].todo = data.todo
             this.setState({
-                 todoArray:this.state.todoArray
+                userArr: arr
             })
         })
     }
 
-    addTodo() {
-        // => SENDING TODO FROM CLIENT TO SERVER ( SOCKER IO )
-        socket.emit("ADD_TODO", {
-            todo: this.state.todo
+
+
+
+    startChat(data) {
+        const currentUser = this.state.currentUser
+        const conversetion = {
+            conversetionIdS: [currentUser._id, data._id],
+            senderID: currentUser._id,
+            receiverID: data._id,
+        }
+
+
+        fetch(`http://localhost:8000/createConversation`, {
+            method: "POST",
+            body: JSON.stringify(conversetion),
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+        }).then(res => res.json().then(data => {
+            this.setState({
+                conversetionOBJ: data.data,
+                messageArr: data.messages
+            })
+            socket.on(`GET_MESSAGE${data.data._id}`, message => {
+                this.state.messageArr.push(message)
+                this.setState({
+                    messageArr: this.state.messageArr,
+                })
+            })
         })
+        ).catch((err) => {
+            console.log(err)
+        })
+    }
+
+
+    sendMessage() {
+        const conversetionOBJ = this.state.conversetionOBJ;
+        const currentUser = this.state.currentUser
+        socket.emit("SEND_MESSAGE",
+            {
+                message: "message",
+                conversetionID: conversetionOBJ._id,
+                senderID: currentUser._id,
+            })
+    }
+
+
+
+    userHeandler() {
         this.setState({
-            todo:""
+            ChatactiveColor: "",
+            UseractiveColor: "green"
         })
     }
-
-    deleteTodo(data) {
-        // => DELETEING TODO 
-        socket.emit("DELTE_TODO", data)
-    }
-
-
-    edit(data, ind) {
-        data.index = ind
+    chatHeandler() {
         this.setState({
-            isUpdateing: false,
-            updatedVal: data
+            ChatactiveColor: "green",
+            UseractiveColor: ""
         })
     }
 
+    handleChange = event => {
+        this.setState({ auth: event.target.checked });
+    };
 
-    // => SENDING TODO FROM SERVER
-    upDateTodo() {
-        const obj = this.state.updatedVal
-        obj.todo = this.state.newTodo
-        socket.emit("UPDATED_TODO", obj)
-        this.setState({
-            isUpdateing:true,
-            newTodo:""
-        })
-    }
+    handleMenu = event => {
+        this.setState({ anchorEl: event.currentTarget });
+    };
+
+    handleClose = () => {
+        this.setState({ anchorEl: null });
+    };
+
+
+
 
     render() {
+        const { auth, anchorEl } = this.state;
+        const open = Boolean(anchorEl);
+
         return (
-            <div >
-                {(this.state.isUpdateing) ?
-                    <div>
-                        <input
-                            type="text"
-                            placeholder="Todo"
-                            value={this.state.todo}
-                            onChange={(ev) => this.setState({ todo: ev.target.value })} />
-                        <button onClick={this.addTodo.bind(this)} >Add</button>
+            // <div>
+            //     <div style={{ display: "flex" }} >
+            //         <div style={{ width: "300px", height: "100vh", borderWidth: 1, borderColor: "#000", borderStyle: "solid", float: "left" }}  >
+            //             <button onClick={this.userHeandler.bind(this)} style={{ width: "50%", backgroundColor: this.state.UseractiveColor, outline: "none", padding: 5 }} >Users</button>
+            //             <button onClick={this.chatHeandler.bind(this)} style={{ width: "50%", backgroundColor: this.state.ChatactiveColor, outline: "none", padding: 5 }} >Chats</button>
+            //             <div>
+            //                 {this.state.userArr.map((val, inde) => {
+            //                     return (
+            //                         <div key={inde} >
+            //                             <button
+            //                                 onClick={this.startChat.bind(this, val)}
+            //                                 key={inde} >{val.username}</button>
+            //                         </div>
+            //                     )
+            //                 })}
+            //             </div>
+            //         </div>
+            //         <div style={{ flex: 1, borderWidth: 1, borderColor: "#000", marginLeft: 10, borderStyle: "solid", float: "left" }}  >
+            //             <h3>{this.state.currentChatName}</h3>
+            //             <div style={{ display: "flex", flexDirection: "column", }} >
+            //                 <div style={{ backgroundColor: "green", height: "90vh", overflowY: "scroll" }} >
+            //                     {this.state.messageArr.map((val, inde) => {
+            //                         return (
+            //                             <p style={{
+            //                                 padding: 10,
+            //                                 backgroundColor:
+            //                                     (val.senderID == this.state.currentUser._id ? "#f2f2f2" : "green"),
+            //                                 color: (val.senderID == this.state.currentUser._id ? "green" : "#fff"),
+            //                                 margin: 20,
+            //                                 textAlign: (val.senderID == this.state.currentUser._id ? "right" : "left")
+            //                             }} key={inde} >{val.message}</p>
+            //                         )
+            //                     })}
+            //                 </div>
+            //                 <div style={{ flex: 1, height: 100 }} >
+            //                     <input style={{ height: 30, width: "90%" }} type="text" onChange={(ev) => this.setState({ message: ev.target.value })} value={this.state.message} placeholder="Message" />
+            //                     <button onClick={this.sendMessage.bind(this)} >Send</button>
+            //                 </div>
+            //             </div>
+            //         </div>
+            //     </div>
+            // </div>
+            <div className={styles.root}>
+                <AppBar style={{ height: 80, justifyContent: "center" }} position="relative">
+                    <Toolbar style={{ display: "flex", justifyContent: "space-between" }} >
+                        <Typography variant="h5" color="inherit" className={styles.grow}>Photos </Typography>
+                        <Fab color="primary" aria-label="Add" >
+                            <AccountCircle />
+                        </Fab>
+                    </Toolbar>
+                </AppBar>
+                <div style={{ backgroundColor: "green",   margin: "auto", }} >
+                    <div style={{ backgroundColor:"red",height:"100%" }} >
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
+                      <div>a</div>
                     </div>
-                    :
-                    <div>
-                        <input
-                            type="text"
-                            placeholder="New Value"
-                            value={this.state.newTodo}
-                            onChange={(ev) => this.setState({ newTodo: ev.target.value })} />
-                        <button onClick={this.upDateTodo.bind(this)} >Updated</button>
-                    </div>}
-                <br />
-                <ul>
-                    {this.state.todoArray.map((val, ind) => {
-                        return (
-                            <li key={ind} >{val.todo} | | <button onClick={this.deleteTodo.bind(this, val)} >Delete</button>
-                                <button onClick={this.edit.bind(this, val, ind)} >Edit</button>
-                            </li>
-                        )
-                    })}
-                </ul>
+                    <div style={{backgroundColor:"green", position:"fixed", bottom:0, height:70,left:0, right:0}} >
+
+                    </div>
+                </div>
             </div>
         )
     }
 }
-
-export default Todo;
-

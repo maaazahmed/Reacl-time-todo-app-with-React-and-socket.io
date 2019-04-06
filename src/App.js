@@ -39,14 +39,19 @@
 
 import React, { Component } from 'react';
 import Todo from "./Components/Todo/index"
+import { BrowserRouter as Router, Route, Link } from "react-router-dom";
+import { SignUp, SignIn, } from "./Components/index"
 
 class App extends Component {
   render() {
-    const arr = ["a", "b", "c", "d", "e", "f"]
     return (
-      <div >
-       <Todo/>
-      </div>
+      <Router>
+        <div>
+          <Route exact path="/" component={SignIn} />
+          <Route path="/SignUp" component={SignUp} />
+          <Route path="/todo" component={Todo} />
+        </div>
+      </Router>
     )
   }
 }
